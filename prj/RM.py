@@ -48,12 +48,8 @@ class User:
     def __init__(self, api_key=None,  username=None, password=None):
         # self.key = api_key
         self.key = api_key
-        '''
         self.username = username
         self.password = password
-        '''
-        self.username = 'qudusov98'
-        self.password = '904310001'
 
     def set_login(self, new_name):
         self.username = new_name
@@ -408,24 +404,3 @@ class Issue:
 
         except (requests.exceptions.ConnectionError, exceptions.ResourceNotFoundError) as error:
             raise general_except.main_error(exception=error)
-
-
-# if __name__ == '__main__':
-#     URL1 = 'http://localhost:8080/redmine'
-#     redmine1 = redm.Redmine(URL1, username='qudusov98', password='904310001')
-#     redmine_class = RedmineProject(URL1)
-#     all_projs = redmine_class.get_all_projects()
-#     for proj in all_projs:
-#         pass
-#         #print(proj)
-#         #print('\n')
-#     my_user = User(username='qudusov98', password='904310001')
-#
-#     issue_class = Issue(url=URL1, user=my_user)
-#     iss1 = issue_class.get_issue_by_issue_id(5)
-#     for i in iss1:
-#         print(i)
-#
-#     iss2 = issue_class.get_all_issue_from_any_project(3)
-#     for i in iss2:
-#         print(i)

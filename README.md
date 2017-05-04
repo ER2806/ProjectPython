@@ -1,15 +1,15 @@
-# ProjectPython
+# Redmine app for telegram integrating
 
-h1 Install project:
+Install project:
 ========================
 
-### requirements
+### Requirements
 * python3 3.5+
 * [python-redmine 2.02](https://github.com/maxtepkeev/python-redmine)
 * telebot
 * sqlite3
 
-### installing
+### Installing
 * make sure, that this programm will be started in local web with Redmine
 * create your own telegram bot by sending message to @BotFather
 * write your bot api key to file 'key'
