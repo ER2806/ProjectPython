@@ -331,7 +331,7 @@ class Issue:
     def change_issue_status(self, issue_id, new_status_id):
         # statud_id: 1 - New, 2 - In Progress 3 - Resolved
         # 4 - FeedBack 5 - Closed 6 - FeedBack
-        if new_status_id > 6:
+        if int(new_status_id) > 6:
             return False
 
         try:
@@ -346,7 +346,7 @@ class Issue:
     def change_issue_priority(self, issue_id, new_priority_id):
         # statud_id: 1 - New, 2 - In Progress 3 - Resolved
         #            4 - FeedBack 5 - Closed 6 - FeedBack
-        if new_priority_id > 5:
+        if int(new_priority_id) > 5:
             return False
 
         try:

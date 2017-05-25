@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 import telebot
-import get_key
+import config
 import credent
 import RM
 import logging
 import general_except
 import sqlite3
 
-ADDRESS = "http://192.168.0.101:8080/redmine"
+ADDRESS = config.get_address()
 
 ''' logger '''
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-handler = logging.FileHandler("log.txt")
+handler = logging.FileHandler(config.get_log())
 handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
@@ -28,7 +28,7 @@ pattern_cred = credent.Credent()
 pattern_project = credent.Project()
 pattern_iss = credent.Issue()
 
-bot = telebot.TeleBot(str(get_key.get()))
+bot = telebot.TeleBot(str(config.get_telegram_key()))
 
 
 @bot.message_handler(commands=['func'])
@@ -37,10 +37,12 @@ def send_func(message):
     text = '/start or /help - welcome message\n\
             /registration - reg process\n\
             /func - list of possible functions\n\
+            /new_project - make new project\n\
             /all_prjs - get all projects\n\
             /my_prjs - get your projects\n\
             /prj_params - get project parameters\n\
             /del_prj - delete project\n\
+            /new_issue - make new issue\n\
             /all_issue - get all issues\n\
             /prj_issue - get project issues\n\
             /chg_issue_status - change issue status\n\
