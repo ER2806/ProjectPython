@@ -8,29 +8,44 @@ class main_error(Exception):
         self.logger_txt = logger_txt
 
         if exception:
+            # print(str(exception))
             if isinstance(exception, requests.exceptions.ConnectionError):
-                self.user_txt = ""
-                self.logger_txt = ""
+                if self.user_txt is None:
+                    self.user_txt = str(exception)
+                if self.logger_txt is None:
+                    self.logger_txt = str(exception)
 
             elif isinstance(exception, redminelib.exceptions.ResourceNotFoundError):
-                self.user_txt = "Hello"
-                self.logger_txt = "Hello"
+                if self.user_txt is None:
+                    self.user_txt = str(exception)
+                if self.logger_txt is None:
+                    self.logger_txt = str(exception)
 
             elif isinstance(exception, redminelib.exceptions.AuthError):
-                self.user_txt = ""
-                self.logger_txt = ""
+                if self.user_txt is None:
+                    self.user_txt = str(exception)
+                if self.logger_txt is None:
+                    self.logger_txt = str(exception)
 
             elif isinstance(exception, redminelib.exceptions.ValidationError):
-                self.user_txt = ""
-                self.logger_txt = ""
+                if self.user_txt is None:
+                    self.user_txt = str(exception)
+                if self.logger_txt is None:
+                    self.logger_txt = str(exception)
 
             elif isinstance(exception, redminelib.exceptions.ForbiddenError):
-                self.user_txt = ""
-                self.logger_txt = ""
+                if self.user_txt is None:
+                    self.user_txt = str(exception)
+                if self.logger_txt is None:
+                    self.logger_txt = str(exception)
 
             else:
-                self.user_txt = str(exception)
-                self.logger_txt = str(exception)
+                if "HTTPConnectionPool" in str(exception):
+                    self.user_txt = "Connection Error"
+                    self.logger_txt = "Connection Error"
+                else:
+                    self.user_txt = str(exception)
+                    self.logger_txt = str(exception)
 
     def __str__(self):
         return self.user_txt

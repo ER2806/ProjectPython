@@ -23,17 +23,11 @@ db_conn = sqlite3.connect("users.db", check_same_thread = False)
 db_curs = db_conn.cursor()
 
 # base init
-"""
-db_curs.execute('''CREATE TABLE users
-                (telegram_id INTEGER PRIMARY KEY, username VARCHAR(100),
-                password VARCHAR(100))
-                ''')
 
-db_conn.commit()
-"""
+pattern_cred = credent.Credent()
+pattern_project = credent.Project()
+pattern_iss = credent.Issue()
 
-
-cred = credent.Credent()
 bot = telebot.TeleBot(str(get_key.get()))
 
 
@@ -55,6 +49,12 @@ def send_func(message):
     bot.send_message(message.chat.id, text)
 
 
+@bot.message_handler(commands=['kill'])
+def exit(message):
+    import sys
+    sys.exit()
+
+
 @bot.message_handler(commands=['help', 'start'])
 def send_welcome(message):
     help_text = '\nThis is a Redmine Bot. Type "/registration" to make registration, \
@@ -66,27 +66,35 @@ def send_welcome(message):
 @bot.message_handler(commands=['registration'])
 def send_registration(message):
     bot.send_message(message.chat.id, "Registration started.")
-    db_string = str(message.chat.id)
-    db_curs.execute("DELETE FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("DELETE FROM users WHERE telegram_id = :1;", (message.chat.id,))
     db_conn.commit()
     bot.send_message(message.chat.id, "Enter your login: ")
     bot.register_next_step_handler(message, process_login_step)
 
 
 def process_login_step(message):
-    cred.set_login(message.text)
+    pattern_cred.set_login(message.text)
     bot.send_message(message.chat.id, "Enter your password: ")
     bot.register_next_step_handler(message, process_password_step)
 
 
 def process_password_step(message):
-    cred.set_password(message.text)
+    pattern_cred.set_password(message.text)
     bot.send_message(message.chat.id, "Registration ended.")
-    db_string = str(message.chat.id) + ",'" + cred.get_login() + "', '" + cred.get_password() + "'"
-    db_curs.execute("INSERT INTO users (telegram_id, username, password) VALUES(" + db_string +
-                    ");")
+
+    try:
+        usr = RM.User(username = pattern_cred.get_login(), password = pattern_cred.get_password())
+        usr.set_key(usr.get_api_key(ADDRESS))
+        if not usr.is_valid_user(ADDRESS):
+            bot.send_message(message.chat.id, "Incorrect credentials")
+            return
+    except general_except.main_error as err:
+        bot.send_message(message.chat.id, "Registration failed, check credentials")
+        return
+    db_curs.execute("INSERT INTO users (telegram_id, username, password) VALUES(:1, :2, :3);",
+                    (message.chat.id, pattern_cred.get_login(), pattern_cred.get_password()))
     db_conn.commit()
-    cred.clean()
+    pattern_cred.clean()
     bot.send_message(message.chat.id, "Correct, well done.")
 
 
@@ -95,9 +103,13 @@ def process_password_step(message):
 def send_all_projects(message):
     redm = RM.RedmineProject(ADDRESS)
     bot.send_message(message.chat.id, "Asking for all projects:")
+    projects = []
     try:
+        print("try")
         projects = redm.get_all_projects()
+        #print("get " + projects.__len__())
     except general_except.main_error as err:
+        print("except")
         bot.send_message(message.chat.id, "Error occured")
         bot.send_message(message.chat.id, err)
         logger.warning(err.to_log)
@@ -111,14 +123,14 @@ def send_all_projects(message):
 @bot.message_handler(commands=['my_prjs'])
 def send_your_projects(message):
     bot.send_message(message.chat.id, "Asking for your projects:")
-    db_string = str(message.chat.id)
-    db_curs.execute("SELECT * FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
     result = db_curs.fetchall()
     if not result:
         result = [("", "", "")]
     user = RM.User(api_key=None, username=result[0][1], password=result[0][2])
     print(db_curs.fetchall())
     redm = RM.RedmineProject(ADDRESS)
+    projects = []
     try:
         projects = redm.get_only_any_user_projects(user)
     except general_except.main_error as err:
@@ -153,6 +165,153 @@ def process_get_pj_params(message):
     return
 
 
+
+# create new project
+@bot.message_handler(commands=['create_project'])
+def create_project(message):
+    bot.send_message(message.chat.id, "Enter new project name: ")
+    bot.register_next_step_handler(message, process_get_pj_name)
+
+
+def process_get_pj_name(message):
+    pattern_project.set_name(str(message.text))
+    bot.send_message(message.chat.id, "Enter new project identificator (use only small eng "
+                                      "letters): ")
+    bot.register_next_step_handler(message, process_get_pj_identificator)
+
+
+def process_get_pj_identificator(message):
+    pattern_project.set_identifier(str(message.text))
+    bot.send_message(message.chat.id, "Enter new project description: ")
+    bot.register_next_step_handler(message, process_get_pj_description)
+
+
+def process_get_pj_description(message):
+    pattern_project.set_description(str(message.text))
+    bot.send_message(message.chat.id, "Enter 1 if project will be public, else 0: ")
+    bot.register_next_step_handler(message, process_get_pj_ispublic)
+
+def process_get_pj_ispublic(message):
+    is_public = str(message.text)
+    if is_public != '0' and is_public != '1':
+        bot.send_message(message.chat.id, "Incorrect is_public parameter")
+        return
+    pattern_project.set_ispublic(is_public)
+    print(*pattern_project.get_params())
+
+    redm = RM.RedmineProject(ADDRESS)
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
+    result = db_curs.fetchall()
+    if not result:
+        result = [("", "", "")]
+    user = RM.User(api_key=None, username=result[0][1], password=result[0][2])
+
+    try:
+        redm.create_new_project(user, name=pattern_project.name,
+                                identifier=pattern_project.identifier,
+                                description=pattern_project.description,
+                                is_public=pattern_project.is_public)
+    except general_except.main_error as err:
+        bot.send_message(message.chat.id, "Error occured")
+        bot.send_message(message.chat.id, err.user_txt)
+        logger.warning(err.to_log)
+        return
+    bot.send_message(message.chat.id, "Project created")
+    return
+
+
+def check_on_correct(word, checking_str):
+    if len(word) == 1:
+        for letter in word:
+            if letter not in checking_str:
+                return False
+    else:
+        return False
+    return True
+
+
+
+# create new issue
+@bot.message_handler(commands=['create_issue'])
+def create_issue(message):
+    bot.send_message(message.chat.id, "Enter project id for issue: ")
+    bot.register_next_step_handler(message, process_get_iss_id)
+
+
+def process_get_iss_id(message):
+    pattern_iss.set_project_id(str(message.text))
+    bot.send_message(message.chat.id, "Enter new issue subject")
+    bot.register_next_step_handler(message, process_get_iss_subject)
+
+
+def process_get_iss_subject(message):
+    pattern_iss.set_subject(str(message.text))
+    bot.send_message(message.chat.id, "Enter issue description: ")
+    bot.register_next_step_handler(message, process_get_iss_description)
+
+
+def process_get_iss_description(message):
+    pattern_iss.set_description(str(message.text))
+    bot.send_message(message.chat.id, "Enter iss_tracker id:\n\t 1 - Bug\n\t 2 - Feature \n\t 3 - Support")
+    bot.register_next_step_handler(message, process_get_iss_tracker_id)
+
+
+def process_get_iss_tracker_id(message):
+    tracker_id = str(message.text)
+    if not check_on_correct(tracker_id, "123"):
+        bot.send_message(message.chat.id, "Incorrect tracker id")
+        return
+
+    pattern_iss.set_tracker_id(int(tracker_id))
+    bot.send_message(message.chat.id, "Enter status id:\n\t 1 - New\n\t 2 - In Progress\n\t" +
+                    " 3 - Resolved\n\t 4 - FeedBack\n\t 5 - Closed\n\t 6 - Rejected")
+    bot.register_next_step_handler(message, process_get_iss_status_id)
+
+
+def process_get_iss_status_id(message):
+    status_id = str(message.text)
+    if not check_on_correct(status_id, "123456"):
+        bot.send_message(message.chat.id, "Incorrect status id")
+        return
+    pattern_iss.set_status_id(int(status_id))
+    bot.send_message(message.chat.id, "Enter priority id:\n\t 1 - Low\n\t 2 - Normal\n\t 3 - "
+                                      "High\n\t "
+                                      "4 - "
+                                      "Urgent\n\t 5 "
+                                      "- Immidiate")
+    bot.register_next_step_handler(message, process_get_iss_priority_id)
+
+
+def process_get_iss_priority_id(message):
+    priority_id = str(message.text)
+    if not check_on_correct(priority_id, "12345"):
+        bot.send_message(message.chat.id, "Incorrect priority id")
+        return
+    pattern_iss.set_priority_id(int(priority_id))
+
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
+    result = db_curs.fetchall()
+    if not result:
+        result = [("", "", "")]
+    user = RM.User(api_key=None, username=result[0][1], password=result[0][2])
+
+    iss = RM.Issue(url=ADDRESS, user=user)
+    try:
+        iss.create_new_issue(user, project_id=pattern_iss.project_id,
+                                description=pattern_iss.description,
+                                subject=pattern_iss.subject,
+                                tracker_id=pattern_iss.tracker_id,
+                                status_id=pattern_iss.status_id,
+                                priority_id=pattern_iss.priority_id)
+    except general_except.main_error as err:
+        bot.send_message(message.chat.id, "Error occured")
+        bot.send_message(message.chat.id, err.user_txt)
+        logger.warning(err.to_log)
+        return
+    bot.send_message(message.chat.id, "Issue created")
+    return
+
+
 # get issue from project
 @bot.message_handler(commands=['prj_issue'])
 def send_issue_in_project(message):
@@ -161,8 +320,7 @@ def send_issue_in_project(message):
 
 
 def process_get_issue_from_project(message):
-    db_string = str(message.chat.id)
-    db_curs.execute("SELECT * FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
     result = db_curs.fetchall()
     if not result:
         result = [("", "", "")]
@@ -184,7 +342,7 @@ def process_get_issue_from_project(message):
 @bot.message_handler(commands=['all_issue'])
 def send_all_issue(message):
     db_string = str(message.chat.id)
-    db_curs.execute("SELECT * FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
     result = db_curs.fetchall()
     if not result:
         result = [("", "", "")]
@@ -211,7 +369,7 @@ def send_change_priority(message):
 
 def process_set_new_priority(message):
     db_string = str(message.chat.id)
-    db_curs.execute("SELECT * FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
     result = db_curs.fetchall()
     if not result:
         result = [("", "", "")]
@@ -239,8 +397,7 @@ def send_change_status(message):
 
 
 def process_set_new_status(message):
-    db_string = str(message.chat.id)
-    db_curs.execute("SELECT * FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
     result = db_curs.fetchall()
     if not result:
         result = [("", "", "")]
@@ -266,8 +423,7 @@ def send_delete_issue(message):
 
 
 def process_get_id_for_delete(message):
-    db_string = str(message.chat.id)
-    db_curs.execute("SELECT * FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1", (message.chat.id,))
     result = db_curs.fetchall()
     if not result:
         result = [("", "", "")]
@@ -297,8 +453,7 @@ def send_delete_project(message):
 
 
 def process_get_prj_id_for_delete(message):
-    db_string = str(message.chat.id)
-    db_curs.execute("SELECT * FROM users WHERE telegram_id=" + db_string + ";")
+    db_curs.execute("SELECT * FROM users WHERE telegram_id = :1;", (message.chat.id,))
     result = db_curs.fetchall()
     if not result:
         result = [("", "", "")]
@@ -327,12 +482,6 @@ def send_welcome(message):
     bot.send_message(message.chat.id, "Hi, " + message.chat.first_name + " " +
         message.chat.last_name + 'type /func to see all posible functions')
 
-
-'''
-@bot.message_handler(content_types=['text'])
-def send_welcome(message):
-    msg = bot.send_message(message.chat.id, "Hi, " + message.chat.first_name + " " + message.chat.last_name + ', please, use something from:\n/start\n/help\n/func')
-'''
 
 print("Start polling")
 bot.send_message(169487942, "Wake up neo, we starting")
